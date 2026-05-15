@@ -1677,37 +1677,16 @@ class AIService {
       throw new Error(`Stream unsupported (content-type=${contentType || 'unknown'})`);
     }
 
-    // DeepSeek Reasoner 状态追踪
-    let inReasoningPhase = false;
-    let needsClosingTag = false; // 追踪是否需要闭合 </thinking>
-
     const result = await this.processSSEStream(response, (data) => {
       const parsed = JSON.parse(data);
       const delta = parsed.choices[0]?.delta;
 
-      // DeepSeek Reasoner: 处理 reasoning_content（思维链）
-      // 注意：空字符串 "" 也是有效的 reasoning_content，表示思维链阶段
+      // DeepSeek Reasoner / R1: 丢弃 reasoning_content（思维链），只保留正式内容。
       const hasReasoningContent = delta?.reasoning_content !== undefined && delta?.reasoning_content !== null;
       const hasActualContent = delta?.content !== undefined && delta?.content !== null && delta?.content !== '';
 
       if (hasReasoningContent) {
-        const reasoningText = delta.reasoning_content;
-        if (!inReasoningPhase && reasoningText) {
-          inReasoningPhase = true;
-          needsClosingTag = true;
-          return `<thinking>${reasoningText}`;
-        } else if (inReasoningPhase && reasoningText) {
-          return reasoningText;
-        }
         return '';
-      }
-
-      // 从 reasoning 切换到 content
-      if (inReasoningPhase && hasActualContent) {
-        inReasoningPhase = false;
-        needsClosingTag = false;
-        // 发送结束标签 + 第一个实际内容
-        return `</thinking>${delta.content}`;
       }
 
       // 普通 content
@@ -1717,12 +1696,6 @@ class AIService {
 
       return '';
     }, onStreamChunk);
-
-    // 🔥 修复：如果流结束时仍在 reasoning 阶段，补充闭合标签
-    if (needsClosingTag) {
-      console.warn('[AI服务-OpenAI流式] 警告：reasoning_content 未正常闭合，补充 </thinking> 标签');
-      return result + '</thinking>';
-    }
 
     return result;
   }
