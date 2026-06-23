@@ -1,0 +1,282 @@
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
+from typing import List
+from server.models import AdminAccount
+from server.schemas import schema
+from server.crud import crud_user
+from server.api.api_v1 import deps
+from server.core import security
+
+router = APIRouter(prefix="/admin", tags=["后台管理"])
+
+@router.get("/", summary="测试管理员路由")
+async def get_admin_root():
+    """确认管理员路由是否成功加载"""
+    return {"message": "仙官府邸可达，灵脉畅通。"}
+
+@router.get("/characters", tags=["仙官管理"])
+async def get_all_characters_admin(current_admin: AdminAccount = Depends(deps.get_current_admin)):
+    """
+    管理员获取所有角色列表（在admin路由器中）
+    """
+    from server.models import CharacterBase
+    
+    characters = await CharacterBase.filter().prefetch_related('player')
+    
+    # 转换为响应格式，添加玩家名称和世界名称
+    character_list = []
+    for char in characters:
+        char_data = {
+            "id": char.id,
+            "character_name": char.character_name,
+            "player_id": char.player_id,
+            "player_name": char.player.user_name,
+            "world_id": char.world_id,
+            "world_name": char.world.name,
+            "is_active": char.is_active,
+            "is_deleted": char.is_deleted,
+            "is_accessible": not char.player.is_banned and not char.is_deleted,
+            "last_played": char.last_played,
+            "play_time_minutes": char.play_time_minutes,
+            "created_at": char.created_at
+        }
+        character_list.append(char_data)
+    
+    return character_list
+
+@router.post("/token", response_model=schema.Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    **仙官登录**
+    
+    用道号和凭证换取访问令牌。
+    """
+    admin = await crud_user.authenticate_admin(
+        user_name=form_data.username, password=form_data.password
+    )
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="仙官道号或凭证错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = security.create_access_token(
+        data={"sub": str(admin.id), "account_type": "admin"}
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# 注意：兑换码管理功能已移至 redemption.py 以避免重复路由
+# 用户权限管理通过 AdminAccount 的 `role` 字段进行控制
+
+@router.get("/accounts", response_model=List[schema.AdminAccount])
+async def get_all_admin_accounts(
+    current_admin: AdminAccount = Depends(deps.get_admin_or_super_admin)
+):
+    """获取所有管理员账号"""
+    admins = await AdminAccount.all()
+    return admins
+
+@router.get("/accounts/{admin_id}", response_model=schema.AdminAccount)
+async def get_admin_account(
+    admin_id: int,
+    current_admin: AdminAccount = Depends(deps.get_admin_or_super_admin)
+):
+    """获取指定管理员账号"""
+    admin = await AdminAccount.get_or_none(id=admin_id)
+    if not admin:
+        raise HTTPException(status_code=404, detail="仙官不存在")
+    return admin
+
+@router.put("/accounts/{admin_id}", response_model=schema.AdminAccount)
+async def update_admin_account(
+    admin_id: int,
+    updates: dict,
+    current_admin: AdminAccount = Depends(deps.get_super_admin)
+):
+    """更新管理员账号"""
+    admin = await AdminAccount.get_or_none(id=admin_id)
+    if not admin:
+        raise HTTPException(status_code=404, detail="仙官不存在")
+    
+    # 如果是修改自己的账号，需要验证当前密码
+    if current_admin.id == admin_id:
+        if "current_password" in updates:
+            from server.core import security
+            if not security.verify_password(updates["current_password"], admin.password):
+                raise HTTPException(status_code=400, detail="当前密码不正确")
+            del updates["current_password"]  # 移除current_password，不保存到数据库
+        elif "password" in updates or "user_name" in updates:
+            # 如果要修改密码或用户名但没有提供当前密码，拒绝请求
+            raise HTTPException(status_code=400, detail="修改密码或用户名时必须提供当前密码")
+    
+    allowed_fields = {"user_name", "password", "role", "current_password"}
+    unexpected_fields = set(updates) - allowed_fields
+    if unexpected_fields:
+        raise HTTPException(status_code=422, detail="包含不允许修改的字段")
+    if "role" in updates and updates["role"] not in {"admin", "super_admin"}:
+        raise HTTPException(status_code=422, detail="无效的管理员角色")
+
+    # 检查新用户名是否已被使用
+    if "user_name" in updates and updates["user_name"] != admin.user_name:
+        existing = await AdminAccount.filter(user_name=updates["user_name"]).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="此道号已被使用")
+    
+    # 处理密码哈希
+    if "password" in updates and updates["password"]:
+        from server.core import security
+        updates["password"] = security.get_password_hash(updates["password"])
+    elif "password" in updates:
+        del updates["password"]
+    
+    await admin.update_from_dict(updates)
+    await admin.save()
+    
+    return admin
+
+@router.delete("/accounts/{admin_id}")
+async def delete_admin_account(
+    admin_id: int,
+    current_admin: AdminAccount = Depends(deps.get_super_admin)
+):
+    """删除管理员账号"""
+    if current_admin.id == admin_id:
+        raise HTTPException(status_code=400, detail="不能删除自己的账号")
+    
+    admin = await AdminAccount.get_or_none(id=admin_id)
+    if not admin:
+        raise HTTPException(status_code=404, detail="仙官不存在")
+    
+    await admin.delete()
+    return {"message": "仙官已被免职"}
+
+@router.get("/me", response_model=schema.AdminAccount)
+async def get_current_admin(
+    current_admin: AdminAccount = Depends(deps.get_admin_or_super_admin)
+):
+    """获取当前登录管理员信息"""
+    return current_admin
+
+@router.post("/create", response_model=schema.AdminAccount, summary="创建新的管理员账号")
+async def create_admin_account(
+    admin_data: schema.AdminAccountCreate,
+    current_admin: AdminAccount = Depends(deps.get_super_admin) # 只有超级管理员能创建
+):
+    """
+    **创建新的管理员账号**
+
+    - 只有 **超级管理员** 才能执行此操作。
+    - `role` 字段可选值为: `super_admin`, `admin`, `moderator`
+    """
+    from server.core import security
+    
+    # 检查用户名是否已存在
+    existing = await AdminAccount.filter(user_name=admin_data.user_name).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="此道号已被使用")
+    
+    # 哈希密码
+    hashed_password = security.get_password_hash(admin_data.password)
+    
+    # 使用 Pydantic 模型的数据创建
+    admin = await AdminAccount.create(
+        user_name=admin_data.user_name,
+        password=hashed_password,
+        role=admin_data.role,
+    )
+    return admin
+
+
+# --- 创意工坊管理 ---
+
+@router.get("/workshop/items", tags=["创意工坊"])
+async def list_workshop_items_admin(
+    q: str | None = None,
+    item_type: str | None = None,
+    include_deleted: bool = False,
+    page: int = 1,
+    page_size: int = 50,
+    current_admin: AdminAccount = Depends(deps.get_admin_or_super_admin),
+):
+    from server.models import WorkshopItem
+    from tortoise.expressions import Q as TQ
+
+    qs = WorkshopItem.all().prefetch_related("author").order_by("-created_at")
+    if not include_deleted:
+        qs = qs.filter(is_deleted=False)
+    if item_type:
+        qs = qs.filter(type=item_type)
+    if q:
+        keyword = q.strip()
+        if keyword:
+            qs = qs.filter(
+                TQ(title__icontains=keyword)
+                | TQ(description__icontains=keyword)
+                | TQ(author__user_name__icontains=keyword)
+            )
+
+    page = max(1, page)
+    page_size = max(1, min(100, page_size))
+    total = await qs.count()
+    offset = (page - 1) * page_size
+    rows = await qs.offset(offset).limit(page_size)
+
+    items = []
+    for row in rows:
+        items.append(
+            {
+                "id": row.id,
+                "type": row.type,
+                "title": row.title,
+                "description": row.description,
+                "tags": row.tags or [],
+                "game_version": row.game_version,
+                "author_id": row.author_id,
+                "author_name": row.author.user_name if row.author else "未知",
+                "downloads": row.downloads,
+                "likes": row.likes,
+                "is_public": row.is_public,
+                "is_deleted": row.is_deleted,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+        )
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.post("/workshop/items/{item_id}/visibility", tags=["创意工坊"])
+async def set_workshop_item_visibility(
+    item_id: int,
+    payload: dict,
+    current_admin: AdminAccount = Depends(deps.get_admin_or_super_admin),
+):
+    from server.models import WorkshopItem
+
+    item = await WorkshopItem.get_or_none(id=item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="工坊内容不存在")
+
+    if "is_public" in payload:
+        item.is_public = bool(payload["is_public"])
+    if "is_deleted" in payload:
+        item.is_deleted = bool(payload["is_deleted"])
+
+    await item.save()
+    return {"message": "已更新"}
+
+
+@router.delete("/workshop/items/{item_id}", tags=["创意工坊"])
+async def delete_workshop_item_admin(
+    item_id: int,
+    current_admin: AdminAccount = Depends(deps.get_admin_or_super_admin),
+):
+    from server.models import WorkshopItem
+
+    item = await WorkshopItem.get_or_none(id=item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="工坊内容不存在")
+
+    await item.delete()
+    return {"message": "已彻底删除"}

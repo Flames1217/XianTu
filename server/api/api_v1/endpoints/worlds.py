@@ -1,0 +1,72 @@
+from fastapi import APIRouter, Depends, HTTPException
+
+from server.schemas import schema
+from server.crud import crud_world
+from server.utils.db_retry import db_retry
+from server.api.api_v1 import deps
+from server.models import AdminAccount
+
+router = APIRouter()
+
+@router.get("/", tags=["世界体系"])
+@db_retry(max_retries=3, delay=1.0)
+async def list_worlds():
+    """
+    获取所有已创建的世界列表。
+    """
+    worlds = await crud_world.get_worlds()
+    return {"items": worlds, "total": len(worlds)}
+
+@router.post("/", response_model=schema.World, tags=["世界体系"])
+async def create_new_world(
+    world_data: schema.WorldCreate,
+    current_admin: AdminAccount = Depends(deps.get_super_admin_user),
+):
+    """
+    开辟一个新世界。
+    """
+    new_world, message = await crud_world.create_world(world=world_data)
+    if not new_world:
+        # 根据 crud 函数返回的消息提供更详细的错误
+        raise HTTPException(status_code=500, detail=f"开辟世界失败: {message}")
+    return new_world
+
+@router.get("/{world_id}", response_model=schema.World, tags=["世界体系"])
+async def get_world(world_id: int):
+    """
+    获取指定世界的详细信息。
+    """
+    world = await crud_world.get_world_by_id(world_id)
+    if not world:
+        raise HTTPException(status_code=404, detail="世界不存在")
+    return world
+
+@router.put("/{world_id}", response_model=schema.World, tags=["世界体系"])
+async def update_world(
+    world_id: int,
+    world_data: schema.WorldUpdate,
+    current_admin: AdminAccount = Depends(deps.get_super_admin_user),
+):
+    """
+    更新世界信息。
+    """
+    updated_world, message = await crud_world.update_world(world_id, world_data)
+    if not updated_world:
+        # 根据 crud 函数返回的消息提供更详细的错误
+        # 注意：这里我们假设更新失败主要是因为找不到世界或数据库错误
+        status_code = 404 if "未找到" in message else 500
+        raise HTTPException(status_code=status_code, detail=f"更新世界失败: {message}")
+    return updated_world
+
+@router.delete("/{world_id}", tags=["世界体系"])
+async def delete_world(
+    world_id: int,
+    current_admin: AdminAccount = Depends(deps.get_super_admin_user),
+):
+    """
+    删除世界。
+    """
+    success = await crud_world.delete_world(world_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="世界不存在")
+    return {"message": "世界删除成功"}
