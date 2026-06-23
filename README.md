@@ -105,7 +105,7 @@
 ```bash
 docker run -d \
   --name xiantu \
-  -p 8080:8080 \
+  -p 8080:80 \
   -v xiantu-data:/data \
   -e ENVIRONMENT=production \
   -e SECRET_KEY=请替换为稳定的随机密钥 \
@@ -118,10 +118,14 @@ SQLite 数据保存在 `/data/xiantu.sqlite3`。不要运行多个共享同一 S
 
 ### Northflank 部署
 
-1. 创建 Combined Service，镜像填写 `ghcr.io/flames1217/xiantu:latest`。
-2. 添加公开 HTTP 端口 `8080`。
-3. 创建持久卷并挂载到 `/data`，实例数保持为 `1`。
-4. 设置环境变量：
+推荐使用 Git 仓库模式，让 Northflank 直接基于本仓库根目录的 `Dockerfile` 构建完整镜像。
+
+1. 创建 Combined Service，部署来源选择 GitHub 仓库。
+2. 选择仓库 `Flames1217/XianTu`，分支选择 `master`。
+3. Build type 选择 Dockerfile，Dockerfile path 填写 `Dockerfile`，Build context 填写 `.`。
+4. 添加公开 HTTP 端口 `80`。
+5. 创建持久卷并挂载到 `/data`，实例数保持为 `1`。
+6. 设置环境变量：
 
 ```env
 ENVIRONMENT=production
@@ -129,7 +133,7 @@ SECRET_KEY=长度至少32位的稳定随机值
 DDCT_DB_URL=sqlite:///data/xiantu.sqlite3
 ```
 
-5. 健康检查路径填写 `/healthz`。
+7. 健康检查路径填写 `/healthz`。
 
 如需初始化管理账号，可在第一次启动时临时增加：
 
@@ -140,6 +144,12 @@ DEFAULT_ADMIN_PASSWORD=高强度密码
 ```
 
 创建完成后建议删除这三个环境变量并重新部署。
+
+如果只是临时快速验证，也可以使用已经发布的 GHCR 镜像：
+
+```txt
+ghcr.io/flames1217/xiantu:latest
+```
 
 ### 本地开发
 
