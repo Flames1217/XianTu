@@ -51,6 +51,22 @@
 
 ---
 
+## 🌿 社区全栈增强版说明
+
+本仓库基于 [qianye60/XianTu](https://github.com/qianye60/XianTu) 进行非商业二次开发，前端持续跟随原项目最新版，并以原项目 `v3.7.8` 曾公开的 FastAPI 后端为基础进行恢复、重构和兼容性补全。
+
+相较原仓库当前仅提供前端的部署方式，本社区版重点补齐：
+
+- 可自行部署的账号、登录、角色与云存档后端
+- 在线状态、每日签到与穿越点
+- 联机穿越、世界实例、邀请代码、地图操作、事件日志与世界快照
+- 创意工坊、入侵报告和远程提示词配置
+- SQLite 持久化、真实数据库健康检查和单镜像部署
+- GitHub Actions 自动测试并发布 GHCR 镜像
+- 面向 Northflank 等容器平台的完整部署方式
+
+本仓库是独立维护的社区增强版，并非原作者的官方后端或官方服务。原项目名称、素材与版权归原作者及仙途项目组所有；使用和二次分发仍须遵守仓库中的 [LICENSE](./LICENSE)。
+
 ## ✨ 功能概览
 
 🤖 **AI 动态叙事** — 支持 Gemini / Claude / OpenAI / DeepSeek 等多种大模型，实时生成个性化剧情
@@ -87,10 +103,43 @@
 ### Docker 部署（推荐）
 
 ```bash
-docker run -d -p 8080:80 qianye60/xiantu:latest
+docker run -d \
+  --name xiantu \
+  -p 8080:8080 \
+  -v xiantu-data:/data \
+  -e ENVIRONMENT=production \
+  -e SECRET_KEY=请替换为稳定的随机密钥 \
+  ghcr.io/flames1217/xiantu:latest
 ```
 
 访问 http://localhost:8080 即可使用。
+
+SQLite 数据保存在 `/data/xiantu.sqlite3`。不要运行多个共享同一 SQLite 文件的副本；需要横向扩容时请迁移到独立数据库。
+
+### Northflank 部署
+
+1. 创建 Combined Service，镜像填写 `ghcr.io/flames1217/xiantu:latest`。
+2. 添加公开 HTTP 端口 `8080`。
+3. 创建持久卷并挂载到 `/data`，实例数保持为 `1`。
+4. 设置环境变量：
+
+```env
+ENVIRONMENT=production
+SECRET_KEY=长度至少32位的稳定随机值
+DDCT_DB_URL=sqlite:///data/xiantu.sqlite3
+```
+
+5. 健康检查路径填写 `/healthz`。
+
+如需初始化管理账号，可在第一次启动时临时增加：
+
+```env
+CREATE_DEFAULT_ADMIN=true
+DEFAULT_ADMIN_USERNAME=自定义管理员名
+DEFAULT_ADMIN_PASSWORD=高强度密码
+```
+
+创建完成后建议删除这三个环境变量并重新部署。
 
 ### 本地开发
 
@@ -107,9 +156,10 @@ npm run build
 
 ## ☁️ 自动构建/部署
 
-推送 `v*` 格式的 tag 时自动触发：
+推送到 `master`、推送 `v*` 格式标签或手动运行工作流时自动触发：
 
-- **Docker 镜像**：构建并推送到 Docker Hub
+- **完整测试**：前端类型检查、生产构建和后端契约测试
+- **Docker 镜像**：构建并推送到 GitHub Container Registry
 - **GitHub Release**：创建 Release 并上传构建产物 zip 包
 
 ```bash
@@ -122,12 +172,13 @@ git push origin v3.7.0
 - CI：`.github/workflows/ci.yml`（push/PR 自动 `type-check` + `build`）
 - Pages：`.github/workflows/pages.yml`（push 到 `master` 自动部署到 GitHub Pages）
 
-### 后端（可选）
+### 本地后端开发
 
-后端用于提供账号/存档等 API，默认使用 SQLite，开箱即用。
+后端用于提供账号、存档、联机穿越和创意工坊等 API，默认使用 SQLite。
 
 ```bash
 pip install -r server/requirements.txt
+set TURNSTILE_ENABLED=false
 uvicorn server.main:app --reload --port 12345
 ```
 

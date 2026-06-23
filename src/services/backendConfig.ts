@@ -23,7 +23,8 @@ export function getBackendServerUrl(): string {
 
   // 生产模式：使用配置的后端URL
   if (typeof BACKEND_BASE_URL === 'string') {
-    return normalizeBackendUrl(BACKEND_BASE_URL);
+    const configuredUrl = normalizeBackendUrl(BACKEND_BASE_URL);
+    return configuredUrl || window.location.origin;
   }
   return '';
 }

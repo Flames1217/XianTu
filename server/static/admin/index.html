@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>仙途 - 仙官管理后台</title>
+    <link rel="stylesheet" href="/admin/static/admin.css" />
+  </head>
+  <body>
+    <!-- 登录界面 -->
+    <div id="loginContainer" class="login-container">
+      <div class="login-card">
+        <h1 class="login-title">🏮 仙官登录</h1>
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label">仙官道号</label>
+            <input
+              type="text"
+              id="username"
+              class="form-input"
+              placeholder="请输入您的道号"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">通行凭证</label>
+            <input
+              type="password"
+              id="password"
+              class="form-input"
+              placeholder="请输入通行凭证"
+              required
+            />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">登录天宫</button>
+          <div id="loginError" class="error-message hidden"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="mainContainer" class="main-container">
+      <header class="header">
+        <div class="header-inner">
+          <h1 class="header-title">仙途 - 仙官管理后台</h1>
+          <div class="header-actions">
+            <span id="userInfo" class="user-info"></span>
+            <button id="changePasswordBtn" class="btn btn-sm btn-warning">🔐 修改密码</button>
+            <button id="refreshBtn" class="btn btn-sm btn-primary">🔄 刷新数据</button>
+            <button id="logoutBtn" class="btn btn-sm btn-danger">👤 退出登录</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="tabs-container">
+        <div class="tabs-layout">
+          <nav class="tabs-nav">
+            <button class="tab-btn active" data-tab="players">玩家管理</button>
+            <button class="tab-btn" data-tab="characters">角色管理</button>
+            <button class="tab-btn" data-tab="ban_records">封号管理</button>
+            <button class="tab-btn" data-tab="appeals">申诉管理</button>
+            <button class="tab-btn" data-tab="admins">仙官管理</button>
+            <button class="tab-btn" data-tab="worlds">世界管理</button>
+            <button class="tab-btn" data-tab="origins">出身管理</button>
+            <button class="tab-btn" data-tab="talents">天赋管理</button>
+            <button class="tab-btn" data-tab="talent_tiers">天资管理</button>
+            <button class="tab-btn" data-tab="spirit_roots">灵根管理</button>
+            <button class="tab-btn" data-tab="codes">兑换码管理</button>
+            <button class="tab-btn" data-tab="workshop">创意工坊</button>
+            <button class="tab-btn" data-tab="system">⚙️ 系统设置</button>
+          </nav>
+
+          <div class="tab-content">
+            <div class="table-header">
+              <div class="table-actions">
+                <button id="addItemBtn" class="btn btn-success hidden">➕ 添加</button>
+              </div>
+            </div>
+            <div id="tableContainer">
+              <!-- 动态内容将在这里显示 -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改账户信息模态框 -->
+    <div id="changePasswordModal" class="modal-overlay hidden">
+      <div class="modal">
+        <h3>🔐 修改账户信息</h3>
+        <form id="changePasswordForm">
+          <div class="form-group">
+            <label class="form-label">仙官道号</label>
+            <input type="text" id="currentUserName" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">当前密码（修改信息时必填）</label>
+            <input type="password" id="currentPassword" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">新密码（留空不修改）</label>
+            <input type="password" id="newPassword" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">确认新密码</label>
+            <input type="password" id="confirmPassword" class="form-input" />
+          </div>
+          <div id="changePasswordError" class="error-message hidden"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="hideChangePasswordModal()">
+              取消
+            </button>
+            <button type="submit" class="btn btn-primary">确认修改</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 通用编辑模态框 -->
+    <div id="editModal" class="modal-overlay hidden">
+      <div class="modal">
+        <h3 id="editModalTitle">编辑</h3>
+        <form id="editForm">
+          <div id="editFormFields"></div>
+          <div id="editError" class="error-message hidden"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="hideEditModal()">取消</button>
+            <button type="submit" id="editModalSubmitBtn" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 封号模态框 -->
+    <div id="banModal" class="modal-overlay hidden">
+      <div class="modal">
+        <h3>🚫 封禁玩家</h3>
+        <form id="banForm">
+          <div class="form-group">
+            <label class="form-label">选择玩家</label>
+            <select id="banPlayerSelect" class="form-select" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">封号类型</label>
+            <select id="banType" class="form-select" required>
+              <option value="temporary">临时封号</option>
+              <option value="permanent">永久封号</option>
+            </select>
+          </div>
+          <div class="form-group" id="banEndTimeGroup">
+            <label class="form-label">封号结束时间</label>
+            <input type="datetime-local" id="banEndTime" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">封号原因</label>
+            <textarea
+              id="banReason"
+              class="form-input"
+              rows="4"
+              placeholder="请详细说明封号原因..."
+              required
+            ></textarea>
+          </div>
+          <div id="banError" class="error-message hidden"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="hideBanModal()">取消</button>
+            <button type="submit" class="btn btn-danger">确认封号</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 角色详情模态框 -->
+    <div id="characterModal" class="modal-overlay hidden">
+      <div class="modal" style="max-width: 800px">
+        <h3 id="characterModalTitle">角色详情</h3>
+        <div id="characterDetails"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="hideCharacterModal()">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/admin/static/admin.js"></script>
+  </body>
+</html>

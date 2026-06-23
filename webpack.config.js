@@ -16,6 +16,8 @@ export default (env, argv) => {
   const isProduction = argv.mode === 'production'
   const isWatch = argv.watch === true // 检测是否是 watch 模式
   const isSingleFile = env?.single === true // 检测是否是单文件模式
+  const backendBaseUrl = process.env.BACKEND_BASE_URL ?? ''
+  const developmentBackendUrl = process.env.DEV_BACKEND_BASE_URL ?? 'http://127.0.0.1:12345'
 
   return {
     mode: isProduction ? 'production' : 'development',
@@ -109,7 +111,7 @@ export default (env, argv) => {
         __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
         __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false),
         'APP_VERSION': JSON.stringify(packageJson.version),
-        'BACKEND_BASE_URL': JSON.stringify('https://back.ddct.top') //后端路径
+        'BACKEND_BASE_URL': JSON.stringify(backendBaseUrl)
       }),
       new HtmlWebpackPlugin({
         template: './index.html',
@@ -156,7 +158,7 @@ export default (env, argv) => {
       proxy: [
         {
           context: ['/api'],
-          target: 'https://back.ddct.top',
+          target: developmentBackendUrl,
           changeOrigin: true,
           secure: false,
           on: {

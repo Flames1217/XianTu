@@ -43,6 +43,3 @@ __pycache__/
 # Windows reserved device name accidentally created by tools
 nul
 NUL
-
-# Server (private repository)
-server/
