@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     DDCT_DB_URL: str | None = None
 
     # Deployment
+    APP_VERSION: str = "4.7.7"
     ALLOWED_ORIGINS: str = ""
     CREATE_DEFAULT_ADMIN: bool = False
     DEFAULT_ADMIN_USERNAME: str | None = None

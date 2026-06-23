@@ -64,3 +64,11 @@ def test_latest_frontend_api_routes_are_available() -> None:
     missing = EXPECTED_ROUTES - actual_routes
 
     assert not missing, f"最新版前端依赖的后端路由缺失: {sorted(missing)}"
+
+
+def test_public_version_has_release_fallback() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/v1/version")
+
+    assert response.status_code == 200
+    assert response.json()["version"] == "4.7.7"

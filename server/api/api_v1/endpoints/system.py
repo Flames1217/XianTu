@@ -17,6 +17,7 @@ from server.utils.system_config import (
     get_rate_limit_config,
     set_configs,
 )
+from server.core.config import settings
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ async def get_app_version():
     config_data = await crud_system_config.get_config(APP_VERSION_KEY)
     if config_data is None:
         # 如果数据库中没有设置，返回一个默认值
-        return {"version": "0.0.0"}
+        return {"version": settings.APP_VERSION}
 
     # 从JSON对象中提取版本号
     if isinstance(config_data, dict) and "version" in config_data:
