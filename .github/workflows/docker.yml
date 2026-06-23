@@ -92,6 +92,7 @@ jobs:
             type=semver,pattern={{major}}
             type=ref,event=branch
             type=sha,format=long
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6
