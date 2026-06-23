@@ -12,6 +12,7 @@ FROM python:3.12-slim AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash nginx tini \
+    && rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -30,7 +31,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
 ENV PYTHONUNBUFFERED=1
 ENV DDCT_DB_URL=sqlite:///data/xiantu.sqlite3
 
-EXPOSE 8080
+EXPOSE 80 8080
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/docker-entrypoint.sh"]
